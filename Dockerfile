@@ -38,6 +38,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Create a non-root user for security (before installing Playwright)
+RUN useradd --create-home --shell /bin/bash notebooklm
+
 # Copy package files
 COPY pyproject.toml uv.lock ./
 COPY src/ ./src/
@@ -49,14 +52,15 @@ RUN pip install --no-cache-dir uv
 # Install the package with browser and server support
 RUN uv pip install --system -e ".[browser,server]"
 
-# Install Playwright browsers (Chromium only for minimal size)
-RUN playwright install chromium
+# Install Playwright browsers to a shared location accessible by the non-root user
+# Use a system-wide location so both root and notebooklm user can access
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+RUN mkdir -p /opt/playwright-browsers && \
+    playwright install chromium && \
+    chown -R notebooklm:notebooklm /opt/playwright-browsers
 
-# Create a non-root user for security
-RUN useradd --create-home --shell /bin/bash notebooklm
+# Switch to non-root user
 USER notebooklm
-
-# Set home directory for credential storage
 ENV HOME=/home/notebooklm
 
 # Expose port for server mode
