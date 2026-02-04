@@ -38,6 +38,7 @@ Example requests:
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from enum import Enum
@@ -47,8 +48,9 @@ from pydantic import BaseModel, Field
 
 # FastAPI imports
 try:
-    from fastapi import FastAPI, HTTPException
+    from fastapi import FastAPI, HTTPException, Request
     from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import JSONResponse
 except ImportError as e:
     raise ImportError(
         "FastAPI is required for the server. Install with: pip install fastapi uvicorn"
@@ -119,6 +121,7 @@ class GenerateRequest(BaseModel):
     source_ids: list[str] | None = Field(None, description="Specific source IDs to use (optional)")
     wait: bool = Field(True, description="Wait for generation to complete (default: True)")
     timeout: int = Field(300, description="Timeout in seconds when waiting")
+    poll_interval: int = Field(10, gt=0, description="Polling interval in seconds when waiting")
     audio_format: str | None = Field(
         None, description="Audio format: deep_dive, brief, critique, debate"
     )
@@ -197,10 +200,10 @@ app = FastAPI(
 )
 
 # CORS configuration for frontend integration
-# WARNING: allow_origins=["*"] is for development only. In production,
-# restrict to specific trusted domains (e.g., ["https://your-frontend.com"])
-# or use environment variables to configure allowed origins.
-_cors_origins = ["*"]  # Configure via CORS_ORIGINS env var for production
+# Configure via CORS_ORIGINS environment variable for production.
+# Set to comma-separated list of allowed origins (e.g., "https://example.com,https://api.example.com")
+# Defaults to "*" for development only.
+_cors_origins = [origin.strip() for origin in os.environ.get("CORS_ORIGINS", "*").split(",")]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
@@ -221,6 +224,100 @@ def get_client() -> NotebookLMClient:
             },
         )
     return _client
+
+
+# =============================================================================
+# Exception Handlers
+# =============================================================================
+
+
+@app.exception_handler(NotebookNotFoundError)
+async def notebook_not_found_handler(request: Request, exc: NotebookNotFoundError):
+    """Handle NotebookNotFoundError exceptions."""
+    return JSONResponse(
+        status_code=404,
+        content={"error": "NotebookNotFound", "message": str(exc)},
+    )
+
+
+@app.exception_handler(ChatError)
+async def chat_error_handler(request: Request, exc: ChatError):
+    """Handle ChatError exceptions."""
+    return JSONResponse(
+        status_code=400,
+        content={"error": "ChatError", "message": str(exc)},
+    )
+
+
+@app.exception_handler(NetworkError)
+async def network_error_handler(request: Request, exc: NetworkError):
+    """Handle NetworkError exceptions."""
+    return JSONResponse(
+        status_code=502,
+        content={"error": "NetworkError", "message": str(exc)},
+    )
+
+
+@app.exception_handler(AuthError)
+async def auth_error_handler(request: Request, exc: AuthError):
+    """Handle AuthError exceptions."""
+    return JSONResponse(
+        status_code=401,
+        content={
+            "error": "AuthError",
+            "message": str(exc),
+            "details": {"action": "Run 'notebooklm login' to re-authenticate"},
+        },
+    )
+
+
+@app.exception_handler(RPCError)
+async def rpc_error_handler(request: Request, exc: RPCError):
+    """Handle RPCError exceptions."""
+    return JSONResponse(
+        status_code=500,
+        content={"error": "RPCError", "message": str(exc)},
+    )
+
+
+@app.exception_handler(SourceAddError)
+async def source_add_error_handler(request: Request, exc: SourceAddError):
+    """Handle SourceAddError exceptions."""
+    return JSONResponse(
+        status_code=400,
+        content={"error": "SourceError", "message": str(exc)},
+    )
+
+
+@app.exception_handler(ValidationError)
+async def validation_error_handler(request: Request, exc: ValidationError):
+    """Handle ValidationError exceptions."""
+    return JSONResponse(
+        status_code=400,
+        content={"error": "ValidationError", "message": str(exc)},
+    )
+
+
+@app.exception_handler(ArtifactNotReadyError)
+async def artifact_not_ready_handler(request: Request, exc: ArtifactNotReadyError):
+    """Handle ArtifactNotReadyError exceptions."""
+    return JSONResponse(
+        status_code=202,
+        content={
+            "error": "ArtifactNotReady",
+            "message": str(exc),
+            "details": {"status": "Generation still in progress"},
+        },
+    )
+
+
+@app.exception_handler(ArtifactNotFoundError)
+async def artifact_not_found_handler(request: Request, exc: ArtifactNotFoundError):
+    """Handle ArtifactNotFoundError exceptions."""
+    return JSONResponse(
+        status_code=404,
+        content={"error": "ArtifactNotFound", "message": str(exc)},
+    )
 
 
 # =============================================================================
@@ -265,50 +362,19 @@ async def chat(request: ChatRequest) -> ChatResponse:
     """
     client = get_client()
 
-    try:
-        result = await client.chat.ask(
-            notebook_id=request.notebook_id,
-            question=request.message,
-            source_ids=request.source_ids,
-            conversation_id=request.conversation_id,
-        )
+    result = await client.chat.ask(
+        notebook_id=request.notebook_id,
+        question=request.message,
+        source_ids=request.source_ids,
+        conversation_id=request.conversation_id,
+    )
 
-        return ChatResponse(
-            answer=result.answer,
-            conversation_id=result.conversation_id,
-            turn_number=result.turn_number,
-            is_follow_up=result.is_follow_up,
-        )
-
-    except NotebookNotFoundError as e:
-        raise HTTPException(
-            status_code=404,
-            detail={"error": "NotebookNotFound", "message": str(e)},
-        ) from e
-    except ChatError as e:
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "ChatError", "message": str(e)},
-        ) from e
-    except NetworkError as e:
-        raise HTTPException(
-            status_code=502,
-            detail={"error": "NetworkError", "message": str(e)},
-        ) from e
-    except AuthError as e:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "error": "AuthError",
-                "message": str(e),
-                "details": {"action": "Run 'notebooklm login' to re-authenticate"},
-            },
-        ) from e
-    except RPCError as e:
-        raise HTTPException(
-            status_code=500,
-            detail={"error": "RPCError", "message": str(e)},
-        ) from e
+    return ChatResponse(
+        answer=result.answer,
+        conversation_id=result.conversation_id,
+        turn_number=result.turn_number,
+        is_follow_up=result.is_follow_up,
+    )
 
 
 @app.post("/generate", response_model=GenerateResponse, responses={400: {"model": ErrorResponse}})
@@ -339,68 +405,18 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
     """
     client = get_client()
 
-    try:
-        if request.type == GenerationType.AUDIO:
-            return await _generate_audio(client, request)
-        elif request.type in (GenerationType.RESUME, GenerationType.REPORT):
-            return await _generate_report(client, request)
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "InvalidType",
-                    "message": f"Unsupported generation type: {request.type}",
-                },
-            )
-
-    except NotebookNotFoundError as e:
-        raise HTTPException(
-            status_code=404,
-            detail={"error": "NotebookNotFound", "message": str(e)},
-        ) from e
-    except SourceAddError as e:
+    if request.type == GenerationType.AUDIO:
+        return await _generate_audio(client, request)
+    elif request.type in (GenerationType.RESUME, GenerationType.REPORT):
+        return await _generate_report(client, request)
+    else:
         raise HTTPException(
             status_code=400,
-            detail={"error": "SourceError", "message": str(e)},
-        ) from e
-    except ValidationError as e:
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "ValidationError", "message": str(e)},
-        ) from e
-    except ArtifactNotReadyError as e:
-        raise HTTPException(
-            status_code=202,
             detail={
-                "error": "ArtifactNotReady",
-                "message": str(e),
-                "details": {"status": "Generation still in progress"},
+                "error": "InvalidType",
+                "message": f"Unsupported generation type: {request.type}",
             },
-        ) from e
-    except ArtifactNotFoundError as e:
-        raise HTTPException(
-            status_code=404,
-            detail={"error": "ArtifactNotFound", "message": str(e)},
-        ) from e
-    except NetworkError as e:
-        raise HTTPException(
-            status_code=502,
-            detail={"error": "NetworkError", "message": str(e)},
-        ) from e
-    except AuthError as e:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "error": "AuthError",
-                "message": str(e),
-                "details": {"action": "Run 'notebooklm login' to re-authenticate"},
-            },
-        ) from e
-    except RPCError as e:
-        raise HTTPException(
-            status_code=500,
-            detail={"error": "RPCError", "message": str(e)},
-        ) from e
+        )
 
 
 async def _generate_audio(client: NotebookLMClient, request: GenerateRequest) -> GenerateResponse:
@@ -441,7 +457,7 @@ async def _generate_audio(client: NotebookLMClient, request: GenerateRequest) ->
             notebook_id=request.notebook_id,
             task_id=status.task_id,
             timeout=request.timeout,
-            poll_interval=10,
+            poll_interval=request.poll_interval,
         )
         return GenerateResponse(
             type="audio",
@@ -489,7 +505,7 @@ async def _generate_report(client: NotebookLMClient, request: GenerateRequest) -
             notebook_id=request.notebook_id,
             task_id=status.task_id,
             timeout=request.timeout,
-            poll_interval=5,
+            poll_interval=request.poll_interval,
         )
 
         # Try to get the report content
