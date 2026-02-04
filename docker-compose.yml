@@ -1,0 +1,61 @@
+# Docker Compose for local development and testing of notebooklm-py
+#
+# Usage:
+#   docker-compose up -d          # Start container
+#   docker-compose run notebooklm login   # Run login command
+#   docker-compose run notebooklm list    # List notebooks
+#   docker-compose down           # Stop container
+
+services:
+  notebooklm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: notebooklm-py:latest
+    container_name: notebooklm-py
+    
+    # Mount credential storage for persistent authentication
+    volumes:
+      - notebooklm-data:/home/notebooklm/.notebooklm
+    
+    # Override entrypoint for interactive use
+    entrypoint: []
+    command: ["notebooklm", "--help"]
+    
+    # Environment variables
+    environment:
+      - NOTEBOOKLM_LOG_LEVEL=INFO
+    
+    # For interactive login (requires TTY)
+    stdin_open: true
+    tty: true
+
+  # Optional: Server mode for API access
+  notebooklm-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: notebooklm-py:latest
+    container_name: notebooklm-server
+    
+    # Mount credential storage
+    volumes:
+      - notebooklm-data:/home/notebooklm/.notebooklm
+    
+    # Run in server mode
+    entrypoint: []
+    command: ["uvicorn", "notebooklm.server:app", "--host", "0.0.0.0", "--port", "8000"]
+    
+    ports:
+      - "8000:8000"
+    
+    environment:
+      - NOTEBOOKLM_LOG_LEVEL=INFO
+    
+    # Don't start by default (use: docker-compose up notebooklm-server)
+    profiles:
+      - server
+
+volumes:
+  notebooklm-data:
+    driver: local

@@ -1,0 +1,37 @@
+# Docker build context exclusions
+.git
+.github
+.venv
+.pytest_cache
+.coverage
+.mypy_cache
+.ruff_cache
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist
+build
+htmlcov
+.DS_Store
+.env
+.notebooklm
+captured_rpcs
+.worktrees
+.worktree
+.sisyphus
+.claude
+
+# Investigation artifacts
+investigate*.py
+INVESTIGATION*.md
+investigation_output
+downloads
+
+# Test artifacts (not needed in production)
+tests
+.pre-commit-config.yaml
+
+# Documentation build artifacts
+docs/_build
+*.md.bak

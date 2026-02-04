@@ -191,6 +191,7 @@ notebooklm skill install
 - **[CLI Reference](docs/cli-reference.md)** - Complete command documentation
 - **[Python API](docs/python-api.md)** - Full API reference
 - **[Configuration](docs/configuration.md)** - Storage and settings
+- **[Docker Deployment](docs/docker.md)** - Docker and Cloudflare Workers
 - **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
 - **[API Stability](docs/stability.md)** - Versioning policy and stability guarantees
 
@@ -209,6 +210,7 @@ notebooklm skill install
 | **macOS** | ✅ Tested | Primary development platform |
 | **Linux** | ✅ Tested | Fully supported |
 | **Windows** | ✅ Tested | Tested in CI |
+| **Docker** | ✅ Tested | Container deployment supported |
 
 ## License
 
