@@ -1185,3 +1185,56 @@ print(result.answer)
 # Streaming is handled internally by the library
 # The ask() method returns the complete response
 ```
+
+---
+
+## REST API Server
+
+For applications that need a REST API interface (e.g., web frontends, microservices), an example FastAPI server wrapper is included in `docs/examples/server.py`.
+
+### Installation
+
+```bash
+# Install with server dependencies
+pip install "notebooklm-py[server]"
+
+# Or install individually
+pip install notebooklm-py fastapi uvicorn
+```
+
+### Quick Start
+
+```bash
+# Authenticate first (one-time setup)
+notebooklm login
+
+# Start the server
+cd docs/examples
+uvicorn server:app --host 0.0.0.0 --port 8000
+```
+
+### Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check and authentication status |
+| `/chat` | POST | Send messages to a notebook conversation |
+| `/generate` | POST | Generate artifacts (audio, reports) |
+
+### Example: Chat Request
+
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What are the key themes?", "notebook_id": "your-notebook-id"}'
+```
+
+### Example: Generate Audio Podcast
+
+```bash
+curl -X POST http://localhost:8000/generate \
+  -H "Content-Type: application/json" \
+  -d '{"type": "audio", "notebook_id": "your-notebook-id", "prompt": "Create an engaging debate"}'
+```
+
+See [`examples/server.py`](./examples/server.py) for the complete implementation with all request/response models.

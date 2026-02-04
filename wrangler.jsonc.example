@@ -1,0 +1,52 @@
+{
+  // Cloudflare Worker configuration for notebooklm-py container binding
+  // See: https://developers.cloudflare.com/containers/get-started
+  //
+  // This example shows how to bind a notebooklm-py container to a Cloudflare Worker.
+  // The container runs the Python notebooklm-py library and can be accessed from
+  // your Worker code.
+  //
+  // Prerequisites:
+  // 1. Build the container: docker build -t notebooklm-py .
+  // 2. Push to Cloudflare Container Registry (or another supported registry)
+  // 3. Configure the container binding in this file
+  //
+  // Usage in Worker:
+  //   export default {
+  //     async fetch(request, env) {
+  //       const container = env.NOTEBOOKLM;
+  //       // Use the container instance to execute notebooklm commands
+  //     }
+  //   }
+
+  "name": "notebooklm-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-01-01",
+  
+  // Container binding configuration
+  // The container runs notebooklm-py and exposes its functionality
+  "containers": {
+    "NOTEBOOKLM": {
+      // Replace with your container image URL
+      // Options:
+      // - Cloudflare Container Registry: registry.cloudflare.com/your-account/notebooklm-py
+      // - Docker Hub: docker.io/your-username/notebooklm-py
+      "image": "notebooklm-py:latest",
+      
+      // Optional: Maximum instances (default is based on your plan)
+      "max_instances": 1,
+      
+      // Optional: Environment variables for the container
+      "env_vars": {
+        // Example: Set log level
+        "NOTEBOOKLM_LOG_LEVEL": "INFO"
+      }
+    }
+  },
+
+  // Optional: Development settings
+  "dev": {
+    "port": 8787,
+    "local_protocol": "http"
+  }
+}
